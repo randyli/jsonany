@@ -18,12 +18,11 @@ class any;
 
 using JsonWriter = rapidjson::Writer<rapidjson::StringBuffer>;
 using JsonDoc = rapidjson::Document;
-
+using JsonValue = rapidjson::Value;
 struct GetterSetter {
   std::function<void(JsonWriter&)> getter;
   std::function<void(JsonDoc&)> setter;
 };
-
 
 template<typename T>
 void writeToJson(T v, JsonWriter& writer) {
@@ -55,6 +54,43 @@ void writeToJson(std::vector<T>& v, JsonWriter& writer){
   writer.EndArray();
 }
 
+template<typename T>
+void readFromJson(T& v, JsonValue& jv) {
+  v.fromJson(jv);
+}
+
+template<>
+void readFromJson(int& v, JsonValue& jv){
+  v = jv.GetInt();
+}
+template<>
+void readFromJson(float& v, JsonValue& jv){
+  v = jv.GetDouble();
+}
+
+template<>
+void readFromJson(const char* &v, JsonValue& jv){
+  
+}
+
+template<>
+void readFromJson(std::string& v, JsonValue& jv){
+  v = jv.GetString();
+}
+
+template <class T>
+void readFromJson(std::vector<T>& v, JsonValue& jv){
+  if(!jv.IsArray()) {
+    return;
+  }
+  //T obj;
+  auto jarray = jv.GetArray();
+  for (int i = 0; i < jarray.Size(); i++) {
+    readFromJson(v[i], jarray[i]);
+    //v[i]push_back(obj);
+  }
+}
+
 using JsonReflector = std::map<std::string, GetterSetter>;
 
 template <class Type>
@@ -72,7 +108,8 @@ namespace {
 struct placeholder {
   virtual std::unique_ptr<placeholder> clone() const = 0;
   virtual const std::type_info& type() const = 0;
-  virtual void toJson(rapidjson::Writer<rapidjson::StringBuffer>& writer) = 0;
+  virtual void toJson(JsonWriter& writer) = 0;
+  virtual void fromJson(JsonValue& value) = 0;
   virtual ~placeholder() {}
 };
 template <class T>
@@ -83,10 +120,16 @@ struct concrete : public placeholder {
     return std::unique_ptr<placeholder>(new concrete<T>(value));
   }
   virtual const std::type_info& type() const override { return typeid(T); }
-  virtual void toJson(rapidjson::Writer<rapidjson::StringBuffer>& writer) override {
+  virtual void toJson(JsonWriter& writer) override {
     //value.toJson(writer);
     writeToJson(value, writer);
   }
+
+  virtual void fromJson(JsonValue& jv) override {
+    //value.toJson(writer);
+    readFromJson(value,jv);
+  }
+
   T value;
 };
 }
@@ -149,8 +192,12 @@ class any {
     return (!empty()) ? ptr->type() : typeid(void);
   }
 
-  void toJson(rapidjson::Writer<rapidjson::StringBuffer>& writer) {  
+  void toJson(JsonWriter& writer) {  
     ptr->toJson(writer); 
+  }
+
+  void fromJson(JsonValue& value) {  
+    ptr->fromJson(value);
   }
 
  private:

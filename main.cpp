@@ -51,6 +51,14 @@ struct Singer {
     writer.Int(age);
     writer.EndObject();
   }
+  void fromJson(json::JsonValue& d) {
+    if(d.HasMember("type") && d["type"].IsString()) {
+      type = d["type"].GetString();
+    }
+    if(d.HasMember("age") && d["age"].IsInt()) {
+      age = d["age"].GetInt();
+    }
+  }
 };
 struct Address {
     std::string country;
@@ -67,6 +75,17 @@ struct Address {
       writer.String(street.c_str());
       writer.EndObject();
     }
+    void fromJson(json::JsonValue& d) {
+    if(d.HasMember("country") && d["country"].IsString()) {
+      country = d["country"].GetString();
+    }
+    if(d.HasMember("city") && d["city"].IsString()) {
+      city = d["city"].GetString();
+    }
+    if(d.HasMember("street") && d["street"].IsString()) {
+      street = d["street"].GetString();
+    }
+  }
 };
 struct Friend {
     std::string relation;
@@ -79,6 +98,15 @@ struct Friend {
     secret.toJson(writer);
     writer.EndObject();
     }
+
+    void fromJson(json::JsonValue& d) {
+    if(d.HasMember("relation") && d["relation"].IsString()) {
+      relation = d["relation"].GetString();
+    }
+    if(d.HasMember("secret")) {
+      secret.fromJson(d["secret"]);
+    }
+  }
 
 };
 struct Person {
@@ -106,6 +134,29 @@ struct Person {
         secret.toJson(writer);
         writer.EndObject();
     }
+
+    void fromJson(json::JsonValue& d) {
+        if(d.HasMember("name") && d["name"].IsString()) {
+            name = d["name"].GetString();
+        }
+        if(d.HasMember("age") && d["age"].IsInt()) {
+            age = d["age"].GetInt();
+        }
+        if(d.HasMember("address")) {
+          address.fromJson(d["address"]);
+        }
+        if(d.HasMember("_friends") && d["_friends"].IsArray()) {
+          //address.fromJson(d["_friends"]);
+          auto friends = d["_friends"].GetArray();
+          for (int i = 0; i < friends.Size(); i++) {
+            _friends[i].fromJson(friends[i]);
+            //_friends.push_back(f);
+          }
+        }
+        if(d.HasMember("secret")) {
+          secret.fromJson(d["secret"]);
+        }
+    }
 };
 
 
@@ -124,6 +175,26 @@ int main() {
   
   json::any f22 = p1;
   f22.toJson(writer);
-  std::cout << buffer.GetString();
+  std::string json = buffer.GetString();
+  std::cout << json << std::endl;
+
+
+  rapidjson::Document document;
+  document.Parse(json.c_str());
+
+  Friend f11{"", Singer{"", 18}};
+  Friend f21{"", std::string("")};
+  Friend f31{"", 3};
+
+  Person p3;
+  p3.secret = std::string();
+
+  p3._friends.push_back(f11);
+  p3._friends.push_back(f21);
+  p3._friends.push_back(f31);
+
+  p3.fromJson(document);
+  std::cout << p3.name << std::endl;
+
   return 0;
 }
