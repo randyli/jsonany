@@ -229,7 +229,7 @@ int main() {
 
   Person p3;
   p3.secret = std::string();
-
+  //对于新生成的对象，any并不知道其真实的数据类型是什么，所以需要手工指定。
   p3._friends.push_back(f11);
   p3._friends.push_back(f21);
   p3._friends.push_back(f31);
