@@ -9,8 +9,8 @@
 #include <typeinfo>
 
 #include "rapidjson/document.h"
-#include "rapidjson/writer.h"
 #include "rapidjson/stringbuffer.h"
+#include "rapidjson/writer.h"
 
 namespace json {
 
@@ -19,79 +19,144 @@ class any;
 using JsonWriter = rapidjson::Writer<rapidjson::StringBuffer>;
 using JsonDoc = rapidjson::Document;
 using JsonValue = rapidjson::Value;
-struct GetterSetter {
-  std::function<void(JsonWriter&)> getter;
-  std::function<void(JsonDoc&)> setter;
-};
 
-template<typename T>
+// 不同数据类型输出json的模板函数
+// 对于基本数据类型，int float string等直接调用rapidjson的对应函数
+// 对于其他类型调用其toJson函数
+// 每个基本类型有对应的特化
+template <typename T>
 void writeToJson(T v, JsonWriter& writer) {
   v.toJson(writer);
 }
-
-template<>
-void writeToJson(int v, JsonWriter& writer){
+template <>
+void writeToJson(int v, JsonWriter& writer) {
   writer.Int(v);
 }
-template<>
-void writeToJson(float v, JsonWriter& writer){
+template <>
+void writeToJson(float v, JsonWriter& writer) {
   writer.Double(v);
 }
-template<>
-void writeToJson(std::string v, JsonWriter& writer){
+template <>
+void writeToJson(std::string v, JsonWriter& writer) {
   writer.String(v.c_str());
 }
-template<>
-void writeToJson(const char* v, JsonWriter& writer){
+template <>
+void writeToJson(const char* v, JsonWriter& writer) {
   writer.String(v);
 }
 template <class T>
-void writeToJson(std::vector<T>& v, JsonWriter& writer){
+void writeToJson(std::vector<T>& v, JsonWriter& writer) {
   writer.StartArray();
-  for(auto it : v){
+  for (auto it : v) {
     writeToJson(it, writer);
   }
   writer.EndArray();
 }
 
-template<typename T>
+// 不同数据类型读取json值的模板函数
+// 基本原理同上，基本类型特化，自定义类型调用其fromJson函数
+template <typename T>
 void readFromJson(T& v, JsonValue& jv) {
   v.fromJson(jv);
 }
 
-template<>
-void readFromJson(int& v, JsonValue& jv){
+template <>
+void readFromJson(int& v, JsonValue& jv) {
   v = jv.GetInt();
 }
-template<>
-void readFromJson(float& v, JsonValue& jv){
+template <>
+void readFromJson(float& v, JsonValue& jv) {
   v = jv.GetDouble();
 }
 
-template<>
-void readFromJson(const char* &v, JsonValue& jv){
-  
-}
+template <>
+void readFromJson(const char*& v, JsonValue& jv) {}
 
-template<>
-void readFromJson(std::string& v, JsonValue& jv){
+template <>
+void readFromJson(std::string& v, JsonValue& jv) {
   v = jv.GetString();
 }
 
 template <class T>
-void readFromJson(std::vector<T>& v, JsonValue& jv){
-  if(!jv.IsArray()) {
+void readFromJson(std::vector<T>& v, JsonValue& jv) {
+  if (!jv.IsArray()) {
     return;
   }
-  //T obj;
+  // T obj;
   auto jarray = jv.GetArray();
   for (int i = 0; i < jarray.Size(); i++) {
     readFromJson(v[i], jarray[i]);
-    //v[i]push_back(obj);
+    // v[i]push_back(obj);
   }
 }
+// 比较模版函数
+// 基本原理同上，基本类型特化
+template <typename T>
+bool isEqual(T& l, T& r) {
+  return l == r;
+}
 
-using JsonReflector = std::map<std::string, GetterSetter>;
+template <>
+bool isEqual(int& l, int& r) {
+  return l == r;
+}
+template <>
+bool isEqual(float& l, float& r) {
+  return std::abs(l - r) < 0.001;
+}
+
+template <>
+bool isEqual(const char*& l, const char*& r) {
+  return std::strcmp(l, r) == 0;
+}
+
+template <>
+bool isEqual(std::string& l, std::string& r) {
+  return l == r;
+}
+
+template <class T>
+bool isEqual(std::vector<T>& l, std::vector<T>& r) {
+  if (l.size() != r.size()) {
+    return false;
+  }
+  for (int i = 0; i < l.size(); i++) {
+    if (l == r) {
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+// 输出模板函数
+// 基本原理同上，基本类型特化
+template <typename T>
+void printOut(T v, std::ostream& os) {
+  os << v;
+}
+
+template <>
+void printOut(int v, std::ostream& os) {
+  os << v;
+}
+template <>
+void printOut(float v, std::ostream& os) {
+  os << v;
+}
+template <>
+void printOut(std::string v, std::ostream& os) {
+  os << v;
+}
+template <>
+void printOut(const char* v, std::ostream& os) {
+  os << v;
+}
+template <class T>
+void printOut(std::vector<T>& v, std::ostream& os) {
+  for (auto it : v) {
+    printOut(it, os);
+  }
+}
 
 template <class Type>
 Type any_cast(any&);
@@ -105,13 +170,17 @@ const Type* any_cast(const any*);
 struct bad_any_cast : public std::bad_cast {};
 
 namespace {
+//保存数据的基本结构
 struct placeholder {
   virtual std::unique_ptr<placeholder> clone() const = 0;
   virtual const std::type_info& type() const = 0;
   virtual void toJson(JsonWriter& writer) = 0;
   virtual void fromJson(JsonValue& value) = 0;
+  virtual bool equal(const placeholder* rh) = 0;
+  virtual void print(std::ostream& os) = 0;
   virtual ~placeholder() {}
 };
+
 template <class T>
 struct concrete : public placeholder {
   concrete(T&& x) : value(std::move(x)) {}
@@ -121,18 +190,54 @@ struct concrete : public placeholder {
   }
   virtual const std::type_info& type() const override { return typeid(T); }
   virtual void toJson(JsonWriter& writer) override {
-    //value.toJson(writer);
+    // value.toJson(writer);
     writeToJson(value, writer);
   }
 
   virtual void fromJson(JsonValue& jv) override {
-    //value.toJson(writer);
-    readFromJson(value,jv);
+    // value.toJson(writer);
+    readFromJson(value, jv);
   }
+
+  virtual bool equal(const placeholder* rh) override {
+    auto p = (concrete<T>*)rh;
+    return isEqual(value, p->value);
+  }
+
+  virtual void print(std::ostream& os) override { printOut(value, os); };
 
   T value;
 };
-}
+
+//对cons char *的特化，对于比较和赋值等操作，直接用const char* 显然会出错。
+template <>
+struct concrete<const char*> : public placeholder {
+  concrete(const char* x) : value(x) {}
+  virtual std::unique_ptr<placeholder> clone() const override {
+    return std::unique_ptr<placeholder>(new concrete<std::string>(value));
+  }
+  virtual const std::type_info& type() const override {
+    return typeid(std::string);
+  }
+  virtual void toJson(JsonWriter& writer) override {
+    // value.toJson(writer);
+    writeToJson(value, writer);
+  }
+
+  virtual void fromJson(JsonValue& jv) override {
+    // value.toJson(writer);
+    readFromJson(value, jv);
+  }
+
+  virtual bool equal(const placeholder* rh) override {
+    auto p = (concrete<std::string>*)rh;
+    return value == p->value;
+  }
+  virtual void print(std::ostream& os) override { os << value; }
+  std::string value;
+};
+
+}  // namespace
 
 class any {
  public:
@@ -192,12 +297,15 @@ class any {
     return (!empty()) ? ptr->type() : typeid(void);
   }
 
-  void toJson(JsonWriter& writer) {  
-    ptr->toJson(writer); 
-  }
+  void toJson(JsonWriter& writer) { ptr->toJson(writer); }
 
-  void fromJson(JsonValue& value) {  
-    ptr->fromJson(value);
+  void fromJson(JsonValue& value) { ptr->fromJson(value); }
+
+  bool operator==(const any& rh) { return ptr->equal(rh.ptr.get()); }
+
+  friend std::ostream& operator<<(std::ostream& os, const any& dt) {
+    dt.ptr->print(os);
+    return os;
   }
 
  private:
@@ -215,13 +323,4 @@ Type any_cast(const any& val) {
   return any_cast<Type>(any(val));
 }
 
-template <class Type>
-Type* any_cast(any* ptr) {
-  return dynamic_cast<Type*>(ptr->ptr.get());
-}
-
-template <class Type>
-const Type* any_cast(const any* ptr) {
-  return dynamic_cast<const Type*>(ptr->ptr.get());
-}
 }  // namespace json
