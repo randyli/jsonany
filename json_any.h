@@ -18,10 +18,42 @@ class any;
 
 using JsonWriter = rapidjson::Writer<rapidjson::StringBuffer>;
 using JsonDoc = rapidjson::Document;
+
 struct GetterSetter {
   std::function<void(JsonWriter&)> getter;
   std::function<void(JsonDoc&)> setter;
 };
+
+
+template<typename T>
+void writeToJson(T v, JsonWriter& writer) {
+  v.toJson(writer);
+}
+
+template<>
+void writeToJson(int v, JsonWriter& writer){
+  writer.Int(v);
+}
+template<>
+void writeToJson(float v, JsonWriter& writer){
+  writer.Double(v);
+}
+template<>
+void writeToJson(std::string v, JsonWriter& writer){
+  writer.String(v.c_str());
+}
+template<>
+void writeToJson(const char* v, JsonWriter& writer){
+  writer.String(v);
+}
+template <class T>
+void writeToJson(std::vector<T>& v, JsonWriter& writer){
+  writer.StartArray();
+  for(auto it : v){
+    writeToJson(it, writer);
+  }
+  writer.EndArray();
+}
 
 using JsonReflector = std::map<std::string, GetterSetter>;
 
@@ -36,6 +68,7 @@ const Type* any_cast(const any*);
 
 struct bad_any_cast : public std::bad_cast {};
 
+namespace {
 struct placeholder {
   virtual std::unique_ptr<placeholder> clone() const = 0;
   virtual const std::type_info& type() const = 0;
@@ -51,82 +84,12 @@ struct concrete : public placeholder {
   }
   virtual const std::type_info& type() const override { return typeid(T); }
   virtual void toJson(rapidjson::Writer<rapidjson::StringBuffer>& writer) override {
-    value.toJson(writer);
+    //value.toJson(writer);
+    writeToJson(value, writer);
   }
   T value;
 };
-
-template <>
-struct concrete<std::string> : public placeholder {
-  concrete(std::string&& x) : value(std::move(x)) {}
-  concrete(const std::string& x) : value(x) {}
-  virtual std::unique_ptr<placeholder> clone() const override {
-    return std::unique_ptr<placeholder>(new concrete<std::string>(value));
-  }
-  virtual const std::type_info& type() const override { return typeid(std::string); }
-  virtual void toJson(rapidjson::Writer<rapidjson::StringBuffer>& writer) override {
-    //value.toJson(writer);
-    writer.String(value.c_str());
-  }
-  std::string value;
-};
-
-template <>
-struct concrete<int> : public placeholder {
-  concrete(int&& x) : value(x) {}
-  concrete(const int& x) : value(x) {}
-  virtual std::unique_ptr<placeholder> clone() const override {
-    return std::unique_ptr<placeholder>(new concrete<int>(value));
-  }
-  virtual const std::type_info& type() const override { return typeid(int); }
-  virtual void toJson(rapidjson::Writer<rapidjson::StringBuffer>& writer) override {
-    writer.Int(value);
-  }
-  int value;
-};
-template <>
-struct concrete<float> : public placeholder {
-  concrete(float&& x) : value(x) {}
-  concrete(const float& x) : value(x) {}
-  virtual std::unique_ptr<placeholder> clone() const override {
-    return std::unique_ptr<placeholder>(new concrete<float>(value));
-  }
-  virtual const std::type_info& type() const override { return typeid(float); }
-  virtual void toJson(rapidjson::Writer<rapidjson::StringBuffer>& writer) override {
-    writer.Double(value);
-  }
-  float value;
-};
-
-
-template <>
-struct concrete<const char*> : public placeholder {
-  concrete(const char* x) : value(x) {}
-  //concrete(std::string& x) : value(x) {}
-  virtual std::unique_ptr<placeholder> clone() const override {
-    return std::unique_ptr<placeholder>(new concrete<const char*> (value));
-  }
-  virtual const std::type_info& type() const override { return typeid(const char*); }
-  virtual void toJson(rapidjson::Writer<rapidjson::StringBuffer>& writer) override {
-    writer.String(value);
-  }
-  const char* value;
-};
-
-
-template <class T>
-struct concrete<std::vector<T>> : public placeholder {
-  concrete(std::vector<T>&& x) : value(std::move(x)) {}
-  concrete(const std::vector<T>& x) : value(x) {}
-  virtual std::unique_ptr<placeholder> clone() const override {
-    return std::unique_ptr<placeholder>(new concrete<std::vector<T>>(value));
-  }
-  virtual const std::type_info& type() const override { return typeid(std::vector<T>); }
-  virtual void toJson(rapidjson::Writer<rapidjson::StringBuffer>& writer) override {
-    
-  }
-  std::vector<T> value;
-};
+}
 
 class any {
  public:

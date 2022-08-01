@@ -33,10 +33,12 @@ protobuf
 
 ### 待完成的功能
 
-1 vector json序列化
+1 vector json序列化 -- OK
 
-2 嵌套序列化
+2 嵌套序列化  -- OK
 
 3 反序列化
 
 4 简化any代码
+
+5 单元测试

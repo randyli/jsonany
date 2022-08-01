@@ -20,13 +20,13 @@ struct  MyInner{
     }
   };
 
-  void toJson(rapidjson::Writer<rapidjson::StringBuffer>& writer_) {
-    writer_.StartObject();
-    writer_.Key("a");
-    writer_.Int(a);
-    writer_.Key("b");
-    writer_.Double(b);
-    writer_.EndObject();
+  void toJson(rapidjson::Writer<rapidjson::StringBuffer>& writer) {
+    writer.StartObject();
+    writer.Key("a");
+    writer.Int(a);
+    writer.Key("b");
+    writer.Double(b);
+    writer.EndObject();
   }
 
   void fromJson(rapidjson::Document& d) {
@@ -43,31 +43,41 @@ struct Person;
 struct Singer {
     std::string type;
     int age;
-    void toJson(rapidjson::Writer<rapidjson::StringBuffer>& writer_) {
-    writer_.StartObject();
-    writer_.Key("type");
-    writer_.String(type.c_str());
-    writer_.Key("age");
-    writer_.Int(age);
-    writer_.EndObject();
+    void toJson(json::JsonWriter& writer) {
+    writer.StartObject();
+    writer.Key("type");
+    writer.String(type.c_str());
+    writer.Key("age");
+    writer.Int(age);
+    writer.EndObject();
   }
 };
 struct Address {
     std::string country;
     std::string city;
     std::string street;
-    std::vector<Person> neighbors;
+
+    void toJson(json::JsonWriter& writer) { 
+      writer.StartObject();
+      writer.Key("country");
+      writer.String(country.c_str());
+      writer.Key("city");
+      writer.String(city.c_str());
+      writer.Key("street");
+      writer.String(street.c_str());
+      writer.EndObject();
+    }
 };
 struct Friend {
     std::string relation;
     json::any secret;
-    void toJson(rapidjson::Writer<rapidjson::StringBuffer>& writer_) {
-    writer_.StartObject();
-    writer_.Key("relation");
-    writer_.String(relation.c_str());
-    writer_.Key("secret");
-    secret.toJson(writer_);
-    writer_.EndObject();
+    void toJson(json::JsonWriter& writer) {
+    writer.StartObject();
+    writer.Key("relation");
+    writer.String(relation.c_str());
+    writer.Key("secret");
+    secret.toJson(writer);
+    writer.EndObject();
     }
 
 };
@@ -77,19 +87,43 @@ struct Person {
     Address address;
     std::vector<Friend> _friends;
     json::any secret;
+
+    void toJson(json::JsonWriter& writer) { 
+        writer.StartObject();
+        writer.Key("name");
+        writer.String(name.c_str());
+        writer.Key("age");
+        writer.Int(age);
+        writer.Key("address");
+        address.toJson(writer);
+        writer.Key("_friends");
+        writer.StartArray();
+        for(auto v : _friends) {
+          v.toJson(writer);
+        }
+        writer.EndArray();
+        writer.Key("secret");
+        secret.toJson(writer);
+        writer.EndObject();
+    }
 };
 
 
 int main() {
   rapidjson::StringBuffer buffer;
-  rapidjson::Writer<rapidjson::StringBuffer> writer_(buffer);
+  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
 
   Friend f1{"my best friend", Singer{"rocker", 18}};
   Friend f2{"new friend", "little girl"};
   Friend f3{"third friend", 3};
   //Friend f4{"hello", std::vector<std::string>{"a", "b"}};
-  json::any f22 = f3;
-  f22.toJson(writer_);
+  
+  Person p2{"p2", 3, Address{"china", "shanghai", "putuo"}};
+  Address addr1{"china", "beijing", "wangjing"};
+  Person p1{"p1", 4, addr1, {f1, f2, f3}, "the kind!"};
+  
+  json::any f22 = p1;
+  f22.toJson(writer);
   std::cout << buffer.GetString();
   return 0;
 }
